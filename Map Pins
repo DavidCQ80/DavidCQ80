@@ -1,0 +1,165 @@
+on('ready', function() {
+    log('Map Pins API Loaded');
+    
+    function decodeGMNotes(encoded) {
+        return unescape(encoded.replace(/%3C/g, '<').replace(/%3E/g, '>'));
+    }
+    
+    function updateMapPinHandout(content) {
+        let handout = findObjs({ type: 'handout', name: 'Map Pin' })[0];
+        if (!handout) {
+            handout = createObj('handout', {
+                name: 'Map Pin',
+                inplayerjournals: 'all'
+            });
+        }
+        handout.set('notes', content);
+    }
+    
+    function addDetailsAction(character) {
+        let ability = findObjs({ type: 'ability', characterid: character.id, name: 'Details' })[0];
+        if (!ability) {
+            createObj('ability', {
+                characterid: character.id,
+                name: 'Details',
+                action: "!showMapPin",
+                istokenaction: true
+            });
+        }
+    }
+    
+    function createMirrorToken(pinToken) {
+        let mirror = createObj('graphic', {
+            name: 'Map Pin Mirror',
+            imgsrc: 'https://s3.amazonaws.com/files.d20.io/images/4277467/iQYjFOsYC5JsuOPUCI9RGA/thumb.png?1401938659',
+            layer: 'objects',
+            left: pinToken.get('left'),
+            top: pinToken.get('top'),
+            width: pinToken.get('width'),
+            height: pinToken.get('height'),
+            controlledby: '',
+            represents: pinToken.get('represents'),
+            statusmarkers: '',
+            pageid: pinToken.get('pageid'),
+            aura1_radius: '0',
+            aura1_color: '#000000',
+            aura1_square: false
+        });
+        
+        if (mirror) {
+            setTimeout(() => {
+                pinToken.set('gmnotes', mirror.id);
+                mirror.set('gmnotes', pinToken.id); 
+                mirror.set({
+                    aura1_radius: '0.01',
+                    aura1_color: '#ffffff',
+                    aura1_square: false,
+                    showplayers_aura1: false
+                });
+            }, 500);
+        }
+    }
+    
+    function setupMapPin(token) {
+        if (token.get('layer') !== 'gmlayer') return;
+        
+        let character = findObjs({ type: 'character', name: 'Pins' })[0];
+        if (!character) {
+            character = createObj('character', {
+                name: 'Pins',
+                controlledby: '',
+                inplayerjournals: ''
+            });
+        }
+        
+        token.set({
+            represents: character.id,
+            name: 'Map Pin'
+        });
+        
+        addDetailsAction(character);
+        createMirrorToken(token);
+    }
+    
+    on('chat:message', function(msg) {
+        if (msg.type !== 'api' || msg.content !== '!showMapPin') return;
+        
+        let player = getObj('player', msg.playerid);
+        let selected = msg.selected;
+        if (!selected || selected.length === 0) {
+            sendChat('Map Pins', '/w ' + player.get('displayname') + ' No pin selected!');
+            return;
+        }
+        
+        let mirrorToken = getObj('graphic', selected[0]._id);
+        if (!mirrorToken) return;
+        
+        let gmPinID = decodeGMNotes(mirrorToken.get('gmnotes'));
+        let gmPin = getObj('graphic', gmPinID);
+        if (!gmPin) return;
+        
+        let gmNotes = decodeGMNotes(gmPin.get('gmnotes')).replace(/^.*\n/, '') || 'No details available.';
+        updateMapPinHandout(gmNotes);
+        sendChat('Map Pins', '/w ' + player.get('displayname') + ' Updated Map Pin handout.');
+    });
+    
+    on('add:graphic', function(token) {
+        setupMapPin(token);
+    });
+
+    // Macro to delete both GM pin and mirror tokens
+    on('chat:message', function(msg) {
+        if (msg.type !== 'api' || msg.content !== '!deleteMapPin') return;
+        
+        let selected = msg.selected;
+        if (!selected || selected.length === 0) {
+            sendChat('Map Pins', 'Please select a Map Pin token to delete!');
+            return;
+        }
+
+        let pinToken = getObj('graphic', selected[0]._id);
+        if (!pinToken) {
+            sendChat('Map Pins', 'Selected token is not valid!');
+            return;
+        }
+
+        let mirrorID = decodeGMNotes(pinToken.get('gmnotes'));
+        if (mirrorID) {
+            let mirrorToken = getObj('graphic', mirrorID);
+            if (mirrorToken) {
+                mirrorToken.remove();  // Delete the mirror token
+            }
+        }
+
+        // Delete the GM pin token
+        pinToken.remove();
+        sendChat('Map Pins', 'Both the Map Pin and its mirror token have been deleted.');
+    });
+
+    // Sync movement of both the GM pin and the mirror token
+    on('change:graphic:left change:graphic:top', function(token) {
+        if (!token.get('gmnotes')) return;  // If the token doesn't have gmnotes, it's not a map pin or mirror
+
+        let mirrorID = decodeGMNotes(token.get('gmnotes'));
+        if (mirrorID) {
+            let mirrorToken = getObj('graphic', mirrorID);
+            if (mirrorToken) {
+                // Move the mirror token to match the pin's position
+                mirrorToken.set({
+                    left: token.get('left'),
+                    top: token.get('top')
+                });
+            }
+        }
+
+        if (token.get('gmnotes') && token.get('gmnotes') !== mirrorID) {
+            let gmPin = getObj('graphic', token.get('gmnotes'));
+            if (gmPin) {
+                gmPin.set({
+                    left: token.get('left'),
+                    top: token.get('top')
+                });
+            }
+        }
+    });
+});
