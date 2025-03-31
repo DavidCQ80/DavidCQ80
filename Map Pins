@@ -28,7 +28,6 @@ on('ready', function() {
         // Ensure image Markdown format is properly converted to HTML
         content = content.replace(/!\[([^\]]*)\]\((https?:\/\/[^\)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%;" />');
 
-        // Remove button parsing (buttons and links are not needed)
         return content;
     }
 
