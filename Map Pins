@@ -1,40 +1,42 @@
+/** To setup create a character called Pins assign your desired image to it, create an ability/macro called details with !showMapPin as the command. 
+Next drag it out onto the gm layer this will create an invisible token on the token layer that can move the pin from the token layer. 
+Now you just need to enter the details of your pin in the Gmnotes on the pin token be sure not to delete the token id stored there as this links the tokens. 
+Moving back to the token layer click where the pin is located and move it to your desired location. 
+Run the details token action and it will create a handout called Map Pins in the journal and the details stored on the pin token from the gm layer will populate in it.
+	*	To create and populate Map Pins handout !showMapPin
+	*	To delete a map pin !deleteMapPin
+	*   To lock the mirrored pin run !lockMapPins
+	*	To add an image to the handout place this in the gm layer token ![Description](URL)
+*/
 on('ready', function() {
-    log('Map Pins API Loaded');
-    
     const clearURL = 'https://s3.amazonaws.com/files.d20.io/images/4277467/iQYjFOsYC5JsuOPUCI9RGA/thumb.png?1401938659';
-    
+    let isLocked = false;
+
     function decodeGMNotes(encoded) {
         return unescape(encoded.replace(/%3C/g, '<').replace(/%3E/g, '>'));
     }
-    
+
     function updateMapPinHandout(content) {
         let handout = findObjs({ type: 'handout', name: 'Map Pin' })[0];
         if (!handout) {
-            log('Creating new handout: Map Pin');
             handout = createObj('handout', {
                 name: 'Map Pin',
                 inplayerjournals: ''
             });
         }
-        log('Updating handout with content.');
-
-        // Parsing images in content
         let parsedContent = parseContent(content);
-
         handout.set('notes', parsedContent);
+        let handoutID = handout.id;
+        sendChat('Map Pins', `/w gm Map Pin handout updated. [Open Map Pin](https://journal.roll20.net/handout/${handoutID})`);
     }
-    
-    function parseContent(content) {
-        // Ensure image Markdown format is properly converted to HTML
-        content = content.replace(/!\[([^\]]*)\]\((https?:\/\/[^\)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%;" />');
 
-        return content;
+    function parseContent(content) {
+        return content.replace(/!\[([^\]]*)\]\((https?:\/\/[^\)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%;" />');
     }
 
     function addDetailsAction(character) {
         let ability = findObjs({ type: 'ability', characterid: character.id, name: 'Details' })[0];
         if (!ability) {
-            log('Creating Details action on Pins character');
             createObj('ability', {
                 characterid: character.id,
                 name: 'Details',
@@ -43,9 +45,8 @@ on('ready', function() {
             });
         }
     }
-    
+
     function createMirrorToken(pinToken) {
-        log('Creating mirror token for ' + pinToken.id);
         let mirror = createObj('graphic', {
             name: 'Map Pin Mirror',
             imgsrc: clearURL,
@@ -54,7 +55,7 @@ on('ready', function() {
             top: pinToken.get('top'),
             width: pinToken.get('width'),
             height: pinToken.get('height'),
-            controlledby: '',
+            controlledby: pinToken.get('controlledby'),
             represents: pinToken.get('represents'),
             statusmarkers: '',
             pageid: pinToken.get('pageid'),
@@ -64,155 +65,106 @@ on('ready', function() {
         });
         
         if (mirror) {
-            log('Mirror token created with ID: ' + mirror.id);
             setTimeout(() => {
                 pinToken.set('gmnotes', mirror.id);
                 mirror.set('gmnotes', pinToken.id); 
-                mirror.set({
-                    aura1_radius: '0.01',
-                    aura1_color: '#ffffff',
-                    aura1_square: false,
-                    showplayers_aura1: false
-                });
-                log('Stored mirror ID in GM Notes: ' + mirror.id);
             }, 500);
-        } else {
-            log('Failed to create mirror token.');
         }
     }
-    
+
     function deleteMirrorToken(pinToken) {
         let mirrorID = decodeGMNotes(pinToken.get('gmnotes'));
         let mirror = getObj('graphic', mirrorID);
         if (mirror) {
-            log('Deleting mirror token with ID: ' + mirror.id);
             mirror.remove();
         }
     }
-    
-    function moveMirrorToken(pinToken) {
-        let mirrorID = decodeGMNotes(pinToken.get('gmnotes'));
-        let mirror = getObj('graphic', mirrorID);
-        if (mirror) {
-            log('Moving mirror token to match GM token');
-            mirror.set({
-                left: pinToken.get('left'),
-                top: pinToken.get('top')
+
+    function moveLinkedTokens(obj) {
+        let linkedID = decodeGMNotes(obj.get('gmnotes'));
+        if (!linkedID) return;
+        
+        let linkedToken = getObj('graphic', linkedID);
+        if (!linkedToken) return;
+        
+        if (isLocked) {
+            obj.set({
+                left: linkedToken.get('left'),
+                top: linkedToken.get('top')
+            });
+            sendChat('Map Pins', '/w gm Map Pins are locked! Unlock with `!lockMapPins`.');
+        } else {
+            linkedToken.set({
+                left: obj.get('left'),
+                top: obj.get('top')
             });
         }
     }
-    
+
     function setupMapPin(token) {
-        log('Checking token on GM layer: ' + token.id);
-
-        // Ensure the token is on the GM layer
-        if (token.get('layer') !== 'gmlayer') {
-            log('Token is not on GM layer, skipping: ' + token.id);
-            return;
-        }
-
-        // Get the character ID connected to the token
+        if (token.get('layer') !== 'gmlayer') return;
         let characterID = token.get('represents');
-        if (!characterID) {
-            log('Token is not linked to a character sheet, skipping: ' + token.id);
-            return;
-        }
-
-        // Find the character sheet based on the character ID
+        if (!characterID) return;
         let character = getObj('character', characterID);
-        if (!character) {
-            log('Character sheet not found for token: ' + token.id);
-            return;
-        }
-
-        // Check if the character sheet name is "Pins"
-        if (character.get('name') !== 'Pins') {
-            log('Character sheet is not named "Pins", skipping: ' + token.id);
-            return; // Skip if the character sheet name is not "Pins"
-        }
-
-        // If we reach here, the token is linked to a "Pins" character sheet
-        log('Setting up new Map Pin token: ' + token.id);
+        if (!character || character.get('name') !== 'Pins') return;
         
-        // Set the token's name to "Pins" (if it's not already)
         if (token.get('name') !== 'Pins') {
-            log('Setting token name to Pins: ' + token.id);
             token.set('name', 'Pins');
         }
-
-        // Create the "Pins" character if it doesn't exist
-        if (!character) {
-            log('Creating Pins character');
-            character = createObj('character', {
-                name: 'Pins',
-                controlledby: '',
-                inplayerjournals: ''
-            });
-        }
-
-        // Set the token's represents property to the Pins character
-        token.set({
-            represents: character.id
-        });
-
-        // Add the "Details" action to the character
+        
+        token.set({ represents: character.id });
         addDetailsAction(character);
-
-        // Create the mirror token
-        createMirrorToken(token);  // Create the mirror token after setting up the original token
+        createMirrorToken(token);
     }
 
     on('chat:message', function(msg) {
-        if (msg.type !== 'api' || msg.content !== '!deleteMapPin') return;
+        if (msg.type !== 'api') return;
         
-        let selected = msg.selected;
-        if (!selected || selected.length === 0) {
-            sendChat('Map Pins', 'Please select a Map Pin token to delete!');
-            return;
+        if (msg.content === '!lockMapPins') {
+            isLocked = !isLocked;
+            let status = isLocked ? 'locked' : 'unlocked';
+            sendChat('Map Pins', `/w gm Map Pins are now **${status}**.`);
         }
         
-        let pinToken = getObj('graphic', selected[0]._id);
-        if (!pinToken) {
-            sendChat('Map Pins', 'Selected token is not valid!');
-            return;
+        if (msg.content === '!deleteMapPin') {
+            let selected = msg.selected;
+            if (!selected || selected.length === 0) {
+                sendChat('Map Pins', 'Please select a Map Pin token to delete!');
+                return;
+            }
+            
+            let pinToken = getObj('graphic', selected[0]._id);
+            if (!pinToken) {
+                sendChat('Map Pins', 'Selected token is not valid!');
+                return;
+            }
+            
+            deleteMirrorToken(pinToken);
+            pinToken.remove();
+            sendChat('Map Pins', 'Both the Map Pin and its mirror token have been deleted.');
         }
         
-        deleteMirrorToken(pinToken);
-        pinToken.remove();
-        log('Deleted GM pin token with ID: ' + pinToken.id);
-        sendChat('Map Pins', 'Both the Map Pin and its mirror token have been deleted.');
-    });
-    
-    on('chat:message', function(msg) {
-        if (msg.type !== 'api' || msg.content !== '!showMapPin') return;
-        
-        let player = getObj('player', msg.playerid);
-        let selected = msg.selected;
-        if (!selected || selected.length === 0) {
-            sendChat('Map Pins', '/w ' + player.get('displayname') + ' No pin selected!');
-            return;
+        if (msg.content === '!showMapPin') {
+            let player = getObj('player', msg.playerid);
+            let selected = msg.selected;
+            if (!selected || selected.length === 0) {
+                sendChat('Map Pins', `/w ${player.get('displayname')} No pin selected!`);
+                return;
+            }
+            
+            let mirrorToken = getObj('graphic', selected[0]._id);
+            if (!mirrorToken) return;
+            
+            let gmPinID = decodeGMNotes(mirrorToken.get('gmnotes'));
+            let gmPin = getObj('graphic', gmPinID);
+            if (!gmPin) return;
+            
+            let gmNotes = decodeGMNotes(gmPin.get('gmnotes')) || 'No details available.';
+            updateMapPinHandout(gmNotes);
         }
-        
-        let mirrorToken = getObj('graphic', selected[0]._id);
-        if (!mirrorToken) {
-            log('No mirror token found.');
-            return;
-        }
-        
-        let gmPinID = decodeGMNotes(mirrorToken.get('gmnotes'));
-        let gmPin = getObj('graphic', gmPinID);
-        if (!gmPin) {
-            log('No GM pin found for ID: ' + gmPinID);
-            return;
-        }
-        
-        let gmNotes = decodeGMNotes(gmPin.get('gmnotes')) || 'No details available.';
-        log('Updating Map Pin handout with details: ' + gmNotes);
-        updateMapPinHandout(gmNotes);
-        sendChat('Map Pins', '/w ' + player.get('displayname') + ' Updated Map Pin handout.');
     });
     
     on('add:graphic', setupMapPin);
     on('remove:graphic', deleteMirrorToken);
-    on('change:graphic', moveMirrorToken);
+    on('change:graphic', moveLinkedTokens);
 });
