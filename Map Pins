@@ -13,7 +13,7 @@ on('ready', function() {
             log('Creating new handout: Map Pin');
             handout = createObj('handout', {
                 name: 'Map Pin',
-                inplayerjournals: 'all'
+                inplayerjournals: ''
             });
         }
         log('Updating handout with content.');
