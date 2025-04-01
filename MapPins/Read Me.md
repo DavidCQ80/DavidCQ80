@@ -8,7 +8,11 @@ Moving back to the token layer click where the pin is located and move it to you
 
 Run the details token action and it will create a handout called Map Pins in the journal and the details stored on the pin token from the gm layer will populate in it.
 
+Now when locking pins it only locks the pins from page you are on.
+
+Moved the link for the tokens to bar 1 on the token.
+
 		To create and populate Map Pins handout !showMapPin
 		To delete a map pin !deleteMapPin
-	        To lock the mirrored pin run !lockMapPins
+	        To lock the pin run !lockMapPins
 		To add an image to the handout place this in the gm layer token "![Description](url)"
