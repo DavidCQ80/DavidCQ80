@@ -1,4 +1,4 @@
-/** Added page lock for pins and moved the token link to bar 1.
+/** Added a confirm deletion with a message that tells you it deletes the mirror and pin token, removed the updated handout with link from chat.
 */
 on('ready', function() {
     const clearURL = 'https://s3.amazonaws.com/files.d20.io/images/4277467/iQYjFOsYC5JsuOPUCI9RGA/thumb.png?1401938659';
@@ -24,14 +24,11 @@ on('ready', function() {
         let parsedContent = parseContent(content);
         handout.set('notes', parsedContent);
         let handoutID = handout.id;
-        sendChat('Map Pins', `/w gm Map Pin handout updated. [Open Map Pin](https://journal.roll20.net/handout/${handoutID})`);
+        // Removed the update message
     }
 
     function parseContent(content) {
-        // First, decode the URL-encoded content
         let decodedContent = decodeURIComponent(content);
-
-        // Now, parse for image links and render them in HTML
         return decodedContent.replace(/!\[([^\]]*)\]\((https?:\/\/[^\)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%;" />');
     }
 
@@ -60,12 +57,12 @@ on('ready', function() {
             represents: pinToken.get('represents'),
             statusmarkers: '',
             pageid: pinToken.get('pageid'),
-            bar1_value: pinToken.id // Store GM pin ID in Bar 1
+            bar1_value: pinToken.id
         });
         
         if (mirror) {
             setTimeout(() => {
-                pinToken.set('bar1_value', mirror.id); // Store Mirror token ID in Bar 1
+                pinToken.set('bar1_value', mirror.id); 
             }, 500);
         }
     }
@@ -116,14 +113,22 @@ on('ready', function() {
         createMirrorToken(token);
     }
 
+    // Function to create the button
+    function createDeleteButton(pinToken) {
+        const buttonMarkup = `!confirmDelete|${pinToken.id}`;  // Create a button that sends !confirmDelete with the token ID
+        sendChat('Map Pins', `/w gm Are you sure you want to delete this Map Pin and its mirror token? [Yes, delete it](${buttonMarkup})`);
+    }
+
     on('chat:message', function(msg) {
         if (msg.type !== 'api') return;
 
+        // Handle locking pins
         if (msg.content === '!lockMapPins') {
             let pageid = Campaign().get('playerpageid');
             toggleLock(pageid);
         }
         
+        // Handle deleting pins with confirmation button
         if (msg.content === '!deleteMapPin') {
             let selected = msg.selected;
             if (!selected || selected.length === 0) {
@@ -137,11 +142,24 @@ on('ready', function() {
                 return;
             }
             
-            deleteMirrorToken(pinToken);
-            pinToken.remove();
-            sendChat('Map Pins', 'Both the Map Pin and its mirror token have been deleted.');
+            // Send button to confirm deletion
+            createDeleteButton(pinToken);
         }
-        
+
+        // Handle the deletion confirmation
+        if (msg.content.startsWith('!confirmDelete|')) {
+            let tokenID = msg.content.split('|')[1];
+            let pinToken = getObj('graphic', tokenID);
+            if (pinToken) {
+                deleteMirrorToken(pinToken);
+                pinToken.remove();
+                sendChat('Map Pins', 'Both the Map Pin and its mirror token have been deleted.');
+            } else {
+                sendChat('Map Pins', 'Selected Map Pin does not exist!');
+            }
+        }
+
+        // Show Map Pin and Update Handout
         if (msg.content === '!showMapPin') {
             let player = getObj('player', msg.playerid);
             let selected = msg.selected;
@@ -157,11 +175,12 @@ on('ready', function() {
             let gmPin = getObj('graphic', gmPinID);
             if (!gmPin) return;
             
-            let gmNotes = gmPin.get('gmnotes'); // Ensure GM Notes are being fetched
+            let gmNotes = gmPin.get('gmnotes');
             if (!gmNotes) {
                 gmNotes = 'No details available.';
             }
-            updateMapPinHandout(gmNotes); // Now updating handout with GM Notes
+
+            updateMapPinHandout(gmNotes);
         }
     });
 
@@ -169,5 +188,6 @@ on('ready', function() {
     on('remove:graphic', deleteMirrorToken);
     on('change:graphic', moveLinkedTokens);
 });
+
 
 
