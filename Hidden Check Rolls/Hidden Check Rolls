@@ -3,9 +3,7 @@
 *!OpenChecks → visible to all players
 *!HiddenChecks → for private checks to the GM
 */
-/*jshint esversion: 9 */
 // Hidden/Open Checks script rewritten for the 2024 Roll20 D&D Sheet
-// Uses getSheetItem async function to access attributes
 
 const OpenHiddenChecks = (() => {
 
