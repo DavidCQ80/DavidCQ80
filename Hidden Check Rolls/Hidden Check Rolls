@@ -1,0 +1,174 @@
+/**
+*Thanks to Stephen S and the Aaron and Nick Olivo for the initial version of this script.
+*!OpenChecks → visible to all players
+*!HiddenChecks → for private checks to the GM
+*/
+/*jshint esversion: 9 */
+// Hidden/Open Checks script rewritten for the 2024 Roll20 D&D Sheet
+// Uses getSheetItem async function to access attributes
+
+const OpenHiddenChecks = (() => {
+
+    const getSheetItemAsync = (characterId, attribute) => {
+        return new Promise((resolve) => {
+            getSheetItem(characterId, attribute).then(value => {
+                resolve(parseInt(value, 10) || 0);
+            });
+        });
+    };
+
+    const getAllAttributes = async (cid) => {
+        const attrNames = [
+            'strength_mod','dexterity_mod','constitution_mod','intelligence_mod','wisdom_mod','charisma_mod',
+            'strength_save_bonus','dexterity_save_bonus','constitution_save_bonus','intelligence_save_bonus','wisdom_save_bonus','charisma_save_bonus',
+            'athletics_bonus','acrobatics_bonus','animal_handling_bonus','arcana_bonus','deception_bonus','history_bonus','insight_bonus','intimidation_bonus',
+            'investigation_bonus','medicine_bonus','nature_bonus','perception_bonus','performance_bonus','persuasion_bonus','religion_bonus','sleight_of_hand_bonus','stealth_bonus','survival_bonus',
+            'passive_perception','perception_bonus'
+        ];
+
+        const promises = attrNames.map(attr => getSheetItemAsync(cid, attr));
+        const results = await Promise.all(promises);
+
+        const mods = attrNames.reduce((acc, name, idx) => {
+            acc[name] = {
+                key: name,
+                mod: results[idx],
+            };
+            return acc;
+        }, {});
+
+        return mods;
+    };
+
+    const buildTable = (values) => {
+        const getMod = (g) => g ? g.mod : -5;
+
+        const s = {
+            div: `display: block; min-height:60px; margin: 5px 0px 0px -30px; padding:0px 5px 0px 5px; border: 0px none; border-radius: 6px 6px 6px 6px; box-shadow: 2px 2px 4px 2px #000; background-color: #fff; background-image: url('${values.hidden ? "https://i.imgur.com/UCIUXyr.jpg" : "https://i.imgur.com/vjL1blE.jpg"}'); text-align: left; white-space: pre-wrap;`,
+            tbl_top: `width: 90%; margin: auto;`,
+            img: `background-color: transparent; border: none; max-height: 60px; padding: 5px; margin: auto;`,
+            name: `font-weight: bold; font-size: 120%; font-style: italic; text-align: center; line-height: 18px; padding: 0px 5px 0px;`,
+            blurb: `font-style: italic; text-align: center; line-height:18px; padding: 0px 5px 0px;`,
+            rolls: `text-align: center; line-height:18px; padding: 0px 5px 0px;`,
+            inlinestyle: `display: inline-block; min-width:18px; min-height:18px; background: white; border: 1px solid black; font-style: normal; text-align: center; line-height:18px; padding: 0px; color: black;`,
+            inlineclass: `inlinerollresult showtip tipsy-n-right`,
+            tbl_abl: `width: 90%; margin: auto;`,
+            th: `font-weight: bold; text-align: center; line-height:18px; padding: 0px 5px 0px;`,
+            td: `text-align: center; line-height:18px; padding: 0px 5px 0px;`,
+            tr_even: `background-color: ${values.hidden ? "#cfd2d0" : "#e0e5c1"};`,
+            tr_odd: `background-color: ${values.hidden ? "#eeeeee" : "#ffffff"};`
+        };
+
+        const passiveValue = 10 + getMod(values.mods.perception_bonus);
+        const passive = `Passive Perception:&nbsp;<span class="${s.inlineclass}" style="${s.inlinestyle}" title="10 + ${getMod(values.mods.perception_bonus)}">${passiveValue}</span>`;
+
+        const inlineRoll = ({ t1, r1, t2, r2 }) =>
+            `<span class="${s.inlineclass}" style="${s.inlinestyle}" title="${t1}">${r1}</span>&#171;-&#187;<span class="${s.inlineclass}" style="${s.inlinestyle}" title="${t2}">${r2}</span>`;
+
+        const rawRoll = inlineRoll({
+            t1: `Rolling 1d20(${values.frst})`,
+            r1: values.frst,
+            t2: `Rolling 1d20(${values.scnd})`,
+            r2: values.scnd
+        });
+
+        const abilityRow = (oe, label, mod, save) =>
+            `<tr style="${oe}"><td style="${s.td}">${label}</td><td style="${s.rolls}">${inlineRoll({ t1: `Rolling 1d20(${values.frst})+${mod}`, r1: values.frst + mod, t2: `Rolling 1d20(${values.scnd})+${mod}`, r2: values.scnd + mod })}</td><td style="${s.rolls}">${inlineRoll({ t1: `Rolling 1d20(${values.frst})+${save}`, r1: values.frst + save, t2: `Rolling 1d20(${values.scnd})+${save}`, r2: values.scnd + save })}</td></tr>`;
+
+        const skillRow = (oe, label, mod) =>
+            `<tr style="${oe}"><td style="${s.td}">${label}</td><td style="${s.rolls}">${inlineRoll({ t1: `Rolling 1d20(${values.frst})+${mod}`, r1: values.frst + mod, t2: `Rolling 1d20(${values.scnd})+${mod}`, r2: values.scnd + mod })}</td></tr>`;
+
+        const abilityList = [
+            ['Strength', 'strength_mod', 'strength_save_bonus'],
+            ['Dexterity', 'dexterity_mod', 'dexterity_save_bonus'],
+            ['Constitution', 'constitution_mod', 'constitution_save_bonus'],
+            ['Intelligence', 'intelligence_mod', 'intelligence_save_bonus'],
+            ['Wisdom', 'wisdom_mod', 'wisdom_save_bonus'],
+            ['Charisma', 'charisma_mod', 'charisma_save_bonus']
+        ];
+
+        const skillList = [
+            ['Athletics', 'athletics_bonus'],
+            ['Acrobatics', 'acrobatics_bonus'],
+            ['Animal Handling', 'animal_handling_bonus'],
+            ['Arcana', 'arcana_bonus'],
+            ['Deception', 'deception_bonus'],
+            ['History', 'history_bonus'],
+            ['Insight', 'insight_bonus'],
+            ['Intimidation', 'intimidation_bonus'],
+            ['Investigation', 'investigation_bonus'],
+            ['Medicine', 'medicine_bonus'],
+            ['Nature', 'nature_bonus'],
+            ['Perception', 'perception_bonus'],
+            ['Performance', 'performance_bonus'],
+            ['Persuasion', 'persuasion_bonus'],
+            ['Religion', 'religion_bonus'],
+            ['Sleight of Hand', 'sleight_of_hand_bonus'],
+            ['Stealth', 'stealth_bonus'],
+            ['Survival', 'survival_bonus']
+        ];
+
+        values.message = `<div style="${s.div}"><table style="${s.tbl_top}"><tr><td rowspan="3"><img style="${s.img}" src="${values.url}"></td><td style="${s.name}">${values.name}</td></tr><tr><td style="${s.blurb}">${passive}</td></tr><tr><td style="${s.rolls}">${rawRoll}</td></tr></table><br><table style="${s.tbl_abl}"><tr><td style="${s.th}">Ability</td><td style="${s.th}">Check</td><td style="${s.th}">Save</td></tr>`;
+
+        abilityList.forEach(([label, modKey, saveKey], i) => {
+            const oe = i % 2 === 0 ? s.tr_even : s.tr_odd;
+            values.message += abilityRow(oe, label, getMod(values.mods[modKey]), getMod(values.mods[saveKey]));
+        });
+
+        values.message += `</table><br><table style="${s.tbl_abl}"><tr><td style="${s.th}">Skill</td><td style="${s.th}">Check</td></tr>`;
+
+        skillList.forEach(([label, modKey], i) => {
+            const oe = i % 2 === 0 ? s.tr_even : s.tr_odd;
+            values.message += skillRow(oe, label, getMod(values.mods[modKey]));
+        });
+
+        values.message += `</table><br></div>`;
+
+        return values.message;
+    };
+
+    const handleInput = async (msg) => {
+        const values = { msg };
+        values.tok = getObj(msg.selected[0]._type, msg.selected[0]._id);
+        values.cha = getObj('character', values.tok.get('represents'));
+
+        if (!values.cha) return;
+
+        values.cid = values.cha.id;
+        values.url = values.tok.get('imgsrc') === '/images/character.png'
+            ? 'https://i.imgur.com/MpqETqe.png'
+            : values.tok.get('imgsrc');
+        values.name = values.cha.get('name');
+        values.hidden = msg.content.startsWith("!HiddenChecks");
+        values.who = msg.who.replace(/ \(GM\)/, '');
+
+        values.mods = await getAllAttributes(values.cid);
+
+        sendChat('QuantumRoll', '[[2d20]]', function(qr) {
+            values.frst = qr[0].inlinerolls[0].results.rolls[0].results[0].v;
+            values.scnd = qr[0].inlinerolls[0].results.rolls[0].results[1].v;
+
+            buildTable(values);
+
+            if (values.hidden) {
+                sendChat(values.who, `/w gm ${values.message}`);
+                sendChat('API - Hidden Roll', `/w "${values.who}" Hidden roll sent to GM.`);
+            } else {
+                sendChat(values.who, values.message);
+            }
+        });
+    };
+
+    on("ready", () => {
+        on('chat:message', async (msg) => {
+            if (msg.type === 'api' &&
+                (msg.content.startsWith("!OpenChecks") || msg.content.startsWith("!HiddenChecks")) &&
+                msg.selected && msg.selected.length === 1) {
+                await handleInput(_.clone(msg));
+            }
+        });
+    });
+
+    return {};
+})();
+
