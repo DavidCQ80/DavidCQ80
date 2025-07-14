@@ -1,6 +1,7 @@
 /** 
 *Simple script that plays a sound when a player whispers to the gm.
 *You will need to add a track and name it Whisper Alert to the jukebox.
+*This will play a sound for all players.
 */
 on('chat:message', function(msg) {
   // Only respond to whispers to the GM
