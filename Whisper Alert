@@ -1,0 +1,23 @@
+/** 
+*Simple script that plays a sound when a player whispers to the gm.
+*You will need to add a track and name it Whisper Alert to the jukebox.
+*/
+on('chat:message', function(msg) {
+  // Only respond to whispers to the GM
+  if (msg.type === 'whisper' && msg.who && msg.who.toLowerCase().includes('(gm)')) {
+    const trackName = 'Whisper Alert';
+
+    const track = findObjs({
+      _type: 'jukeboxtrack',
+      title: trackName
+    })[0];
+
+    if (track) {
+      log(`Whisper to GM detected. Playing: ${trackName}`);
+      track.set('playing', true);
+      track.set('softstop', false);
+    } else {
+      log(`❌ Track "${trackName}" not found in Jukebox.`);
+    }
+  }
+});
