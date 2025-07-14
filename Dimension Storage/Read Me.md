@@ -1,4 +1,9 @@
 Storage Management
+A way to list items the players have collected during their adventures in a magical bag, sack or hole that calculates weight and amount.
+It stores this in a handout created when !dimensionbag add "Bag Name" "quantity item weight" is run.
+
+!storageconfig — Opens the configuration menu.
+*Configuration Commands
  *   !storageconfig — Opens the configuration menu.
 
 *Configuration Commands
