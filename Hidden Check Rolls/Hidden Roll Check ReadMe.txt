@@ -1,0 +1,2 @@
+Thanks to Stephen S and the Aaron and Nick Olivo for the initial version of this script.
+I have updated this script to work with the 2024 DnD 5e sheet. It reads the characters stat bonus, skill bonus and passive perception and outputs it to chat either whispered or public.
