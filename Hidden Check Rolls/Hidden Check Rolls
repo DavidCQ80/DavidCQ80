@@ -4,15 +4,32 @@
 *!HiddenChecks → for private checks to the GM
 */
 // Hidden/Open Checks script rewritten for the 2024 Roll20 D&D Sheet
+/*jshint esversion: 9 */
+// Hidden/Open Checks script for both 2014 and 2024 Roll20 D&D Sheets
+// Auto-detects sheet type and uses getSheetItem for 2024 or getAttrByName for 2014
 
 const OpenHiddenChecks = (() => {
 
-    const getSheetItemAsync = (characterId, attribute) => {
-        return new Promise((resolve) => {
-            getSheetItem(characterId, attribute).then(value => {
-                resolve(parseInt(value, 10) || 0);
-            });
-        });
+    const tryGetSheetItem = async (characterId, attribute) => {
+        try {
+            const value = await getSheetItem(characterId, attribute);
+            if (value !== undefined && value !== null && value !== "") {
+                return parseInt(value, 10) || 0;
+            }
+        } catch (e) {
+            // ignore errors for non-2024 sheets
+        }
+        return null;
+    };
+
+    const getUniversalAttribute = async (characterId, attribute) => {
+        // Try 2024 sheet first
+        const sheetVal = await tryGetSheetItem(characterId, attribute);
+        if (sheetVal !== null) return sheetVal;
+
+        // Fallback for 2014 or legacy sheets
+        const legacyVal = getAttrByName(characterId, attribute);
+        return parseInt(legacyVal, 10) || 0;
     };
 
     const getAllAttributes = async (cid) => {
@@ -24,18 +41,16 @@ const OpenHiddenChecks = (() => {
             'passive_perception','perception_bonus'
         ];
 
-        const promises = attrNames.map(attr => getSheetItemAsync(cid, attr));
+        const promises = attrNames.map(attr => getUniversalAttribute(cid, attr));
         const results = await Promise.all(promises);
 
-        const mods = attrNames.reduce((acc, name, idx) => {
+        return attrNames.reduce((acc, name, idx) => {
             acc[name] = {
                 key: name,
-                mod: results[idx],
+                mod: results[idx]
             };
             return acc;
         }, {});
-
-        return mods;
     };
 
     const buildTable = (values) => {
